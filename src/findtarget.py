@@ -151,6 +151,10 @@ if __name__ == '__main__':
 
     images = glob.glob(args[0])
 
+    if len(images) == 0:
+        print('No images found')
+        exit()
+
     # distance from top left fiducial to bottom right fiducial (center to center) in mm
     fid_dis_left_to_right = 172  # 172 millimeters
     fid_diameter = 69  # 69 millimeters
