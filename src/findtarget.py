@@ -10,23 +10,23 @@ class Image:
     distance: float
     angle: float
 
-    def __init__(self, name: str, distance: float, angle: float):
+    def __init__(self, name: str, distance: float, angle: float) -> None:
         self.name = name
         self.distance = distance
         self.angle = angle
 
 
-def focal_length(measured_distance, real_width, width_in_rf_image):
+def focal_length(measured_distance, real_width, width_in_rf_image) -> float:
     focal_length_value = (width_in_rf_image * measured_distance) / real_width
     return focal_length_value
 
 
-def distance_finder(focal_length, real_face_width, face_width_in_frame):
+def distance_finder(focal_length, real_face_width, face_width_in_frame) -> float:
     distance = (real_face_width * focal_length)/face_width_in_frame
     return distance
 
 
-def main(fname: str, display: bool):
+def ft_main(fname: str, display: bool) -> Image:
 
     # reals = [1.5, 2, 3, 4]
     # fls = []
@@ -164,7 +164,7 @@ if __name__ == '__main__':
 
     imgs = []
     for image in images:
-        img = main(image, args[1])
+        img = ft_main(image, args[1])
         imgs.append(img)
 
     # sort the images by distance
