@@ -7,11 +7,13 @@ import re
 
 class Image:
     name: str
+    focal_length: float
     distance: float
     angle: float
 
-    def __init__(self, name: str, distance: float, angle: float) -> None:
+    def __init__(self, name: str, focal_length: float, distance: float, angle: float) -> None:
         self.name = name
+        self.focal_length = focal_length
         self.distance = distance
         self.angle = angle
 
@@ -26,10 +28,7 @@ def distance_finder(focal_length, real_face_width, face_width_in_frame) -> float
     return distance
 
 
-def ft_main(fname: str, display: bool) -> Image:
-
-    # reals = [1.5, 2, 3, 4]
-    # fls = []
+def ft_main(fname: str, display: bool, avg_fl: float, fid_dis_left_to_right: float, real_distance: float) -> Image:
 
     # print(f'\n{fname}')
     img = cv.imread(fname)
@@ -38,16 +37,14 @@ def ft_main(fname: str, display: bool) -> Image:
     hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
 
     # find yellow
-    lower_yellow = np.array([20, 100, 100])
-    upper_yellow = np.array([30, 255, 255])
-    mask = cv.inRange(hsv, lower_yellow, upper_yellow)
-    res = cv.bitwise_and(img, img, mask=mask)
+    # lower_color = np.array([20, 100, 100])
+    # upper_color = np.array([30, 255, 255])
 
     # find green
-    # lower_green = np.array([40, 100, 100])
-    # upper_green = np.array([70, 255, 255])
-    # mask = cv.inRange(hsv, lower_green, upper_green)
-    # res = cv.bitwise_and(img, img, mask=mask)
+    lower_color = np.array([40, 100, 100])
+    upper_color = np.array([70, 255, 255])
+    mask = cv.inRange(hsv, lower_color, upper_color)
+    res = cv.bitwise_and(img, img, mask=mask)
 
     gray = cv.cvtColor(res, cv.COLOR_BGR2GRAY)
 
@@ -72,6 +69,37 @@ def ft_main(fname: str, display: bool) -> Image:
     # sort the fiducials
     fiducials = sorted(fiducials, key=lambda x: x[0])
     fiducials = sorted(fiducials, key=lambda x: x[1])
+
+    if len(fiducials) < 4:
+        # lower the tolerance and try again
+        lower_color = np.array([40, 50, 50])
+        upper_color = np.array([70, 255, 255])
+        mask = cv.inRange(hsv, lower_color, upper_color)
+        res = cv.bitwise_and(img, img, mask=mask)
+
+        gray = cv.cvtColor(res, cv.COLOR_BGR2GRAY)
+
+        # filter out noise, there are 4 fiducials +/- 10% of each other
+        kernel = np.ones((5, 5), np.uint8)
+        mask = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel)
+        mask = cv.morphologyEx(mask, cv.MORPH_CLOSE, kernel)
+
+        # find contours
+        contours, hierarchy = cv.findContours(
+            mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        # find the 4 fiducials
+        fiducials = []
+        for cnt in contours:
+            M = cv.moments(cnt)
+            if M['m00'] != 0:
+                cx = int(M['m10']/M['m00'])
+                cy = int(M['m01']/M['m00'])
+                fiducials.append([cx, cy])
+
+        # sort the fiducials
+        fiducials = sorted(fiducials, key=lambda x: x[0])
+        fiducials = sorted(fiducials, key=lambda x: x[1])
 
     # show the fiducials
     for fiducial in fiducials:
@@ -102,10 +130,9 @@ def ft_main(fname: str, display: bool) -> Image:
 
     # print('fid_dis_left_to_right_pixels = ', fid_dis_left_to_right_pixels)
 
-    # real = reals[0] * 1000
-
-    # fl = focal_length(real, fid_dis_left_to_right, fid_dis_left_to_right_pixels)
-    # fls.append((real, fl))
+    if real_distance is not None:
+        fl = focal_length(real_distance, fid_dis_left_to_right, fid_dis_left_to_right_pixels)
+        avg_fl = fl
 
     found_distance = distance_finder(
         avg_fl, fid_dis_left_to_right, fid_dis_left_to_right_pixels)
@@ -120,7 +147,7 @@ def ft_main(fname: str, display: bool) -> Image:
     angle = angle * 180 / np.pi
     # print(f"Angle: {angle} degrees")
 
-    return Image(fname, found_distance, angle)
+    return Image(fname, avg_fl, found_distance, angle)
 
     # reals.pop(0)
 
@@ -156,19 +183,35 @@ if __name__ == '__main__':
         exit()
 
     # distance from top left fiducial to bottom right fiducial (center to center) in mm
-    fid_dis_left_to_right = 172  # 172 millimeters
-    fid_diameter = 69  # 69 millimeters
+    fid_dis_left_to_right = 190  # millimeters
+    fid_diameter = 61  # millimeters
 
     # this is only true for images in delta/
-    avg_fl = 1695.6  # 1695.6 millimeters
+    avg_fl = 1234  # millimeters
 
+    #real_distances = [500, 1000, 1500, 2000, 2500, 3000, 3500]
+    real_distances = []
     imgs = []
     for image in images:
-        img = ft_main(image, args[1])
+        img = ft_main(image, args[1], avg_fl, fid_dis_left_to_right, None if len(real_distances) == 0 else real_distances[0])
         imgs.append(img)
+        try:
+            real_distances.pop(0)
+        except:
+            pass
 
     # sort the images by distance
     imgs = sorted(imgs, key=lambda x: x.distance)
 
     for img in imgs:
-        print(f"{img.name}\tdistance: {img.distance}mm\tangle: {img.angle} degrees")
+        print(f"{img.name}\tfocal length: {img.focal_length}mm\tdistance: {img.distance}mm\tangle: {img.angle} degrees")
+
+    # find the average focal length but remove any outliers
+    fls = []
+    for img in imgs:
+        fls.append(img.focal_length)
+    fls = sorted(fls)
+    fls.pop(0)
+    fls.pop(-1)
+    avg_fl = sum(fls) / len(fls)
+    print(f"Average focal length: {avg_fl}")
