@@ -30,7 +30,7 @@ def main():
         data = json.dumps(img_details.__dict__, indent=4)
         f.write(data)
 
-    # 
+    print(img_details.__dict__)
 
 
 if __name__ == '__main__':
